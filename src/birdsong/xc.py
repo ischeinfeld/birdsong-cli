@@ -147,7 +147,7 @@ def download_species_recordings(
     accepted_quality = _normalize_quality(quality_at_least)
     ranked_candidates = sort_recordings(
         filter_recordings(
-            client.search_species(entry.common_name),
+            _search_recordings(client, entry.common_name),
             minimum_quality=accepted_quality,
         )
     )
@@ -183,7 +183,7 @@ def download_species_recordings(
             if progress is not None:
                 progress(
                     f"skipping XC{recording.xc_id}: download failed "
-                    f"({_format_download_error(exc)})"
+                    f"({_format_request_error(exc)})"
                 )
             continue
         manifest["downloads"].append(
@@ -343,10 +343,32 @@ def _https_url(value: str) -> str:
     return value
 
 
-def _format_download_error(exc: urllib.error.URLError) -> str:
+def _search_recordings(
+    client: XenoCantoClient,
+    species_name: str,
+) -> list[XenoCantoRecording]:
+    try:
+        return client.search_species(species_name)
+    except KeyboardInterrupt:
+        raise
+    except BirdsongError:
+        raise
+    except (json.JSONDecodeError, TimeoutError, TypeError, ValueError, KeyError, urllib.error.URLError) as exc:
+        raise BirdsongError(
+            f"Unable to query xeno-canto for {species_name}: {_format_request_error(exc)}"
+        ) from exc
+
+
+def _format_request_error(exc: Exception) -> str:
     if isinstance(exc, urllib.error.HTTPError):
         return f"HTTP {exc.code} {exc.reason}"
-    reason = getattr(exc, "reason", None)
-    if reason:
-        return str(reason)
+    if isinstance(exc, urllib.error.URLError):
+        reason = getattr(exc, "reason", None)
+        if reason:
+            return str(reason)
+        return str(exc)
+    if isinstance(exc, json.JSONDecodeError):
+        return "invalid JSON response"
+    if isinstance(exc, (KeyError, TypeError, ValueError)):
+        return "unexpected API response"
     return str(exc)

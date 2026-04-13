@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass
+import shutil
+import subprocess
+from dataclasses import dataclass, replace
 from pathlib import Path
 
+from mutagen.id3 import ID3, ID3NoHeaderError, TIT2, TRCK
+
 from .errors import BirdsongError
-from .names import normalize_name
+from .names import normalize_name, sanitize_filename_component
 from .taxonomy import Taxonomy, TaxonomyEntry
 
 SUPPORTED_AUDIO_EXTENSIONS = {
@@ -22,15 +26,78 @@ SUPPORTED_AUDIO_EXTENSIONS = {
     ".wma",
 }
 
+DEFAULT_EXPORT_BITRATE = "192k"
 LEADING_NAME_RE = re.compile(r"^(?P<name>.+?)\s+\d{2}\b")
 
 
 @dataclass(frozen=True, slots=True)
 class PlaylistBuildResult:
-    output_path: Path
+    output_path: Path | None
     matched_files_by_species: dict[str, list[Path]]
     missing_species: list[str]
+    ordered_files: list[Path]
     entry_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class AudioExportTrack:
+    track_number: int
+    source_path: Path
+    output_path: Path
+
+
+@dataclass(frozen=True, slots=True)
+class AudioExportResult:
+    output_dir: Path
+    exported_tracks: list[AudioExportTrack]
+
+    @property
+    def track_count(self) -> int:
+        return len(self.exported_tracks)
+
+
+def prepare_playlist(
+    requested_entries: list[TaxonomyEntry],
+    sound_dirs: list[Path],
+    taxonomy: Taxonomy,
+    *,
+    strict: bool = False,
+) -> PlaylistBuildResult:
+    matched_files_by_species = index_audio_files(sound_dirs, requested_entries, taxonomy)
+    missing_species = [
+        entry.common_name
+        for entry in requested_entries
+        if not matched_files_by_species.get(entry.common_name)
+    ]
+    if strict and missing_species:
+        raise BirdsongError("Missing audio for: " + ", ".join(missing_species))
+
+    ordered_files = order_playlist_files(requested_entries, matched_files_by_species)
+    return PlaylistBuildResult(
+        output_path=None,
+        matched_files_by_species=matched_files_by_species,
+        missing_species=missing_species,
+        ordered_files=ordered_files,
+        entry_count=len(ordered_files),
+    )
+
+
+def write_playlist(
+    playlist_result: PlaylistBuildResult,
+    output_path: Path,
+    *,
+    absolute_paths: bool = False,
+) -> PlaylistBuildResult:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    lines = ["#EXTM3U"]
+    for file_path in playlist_result.ordered_files:
+        if absolute_paths:
+            playlist_path = str(file_path.resolve())
+        else:
+            playlist_path = os.path.relpath(file_path, start=output_path.parent)
+        lines.append(playlist_path)
+    output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return replace(playlist_result, output_path=output_path)
 
 
 def build_playlist(
@@ -42,35 +109,160 @@ def build_playlist(
     strict: bool = False,
     absolute_paths: bool = False,
 ) -> PlaylistBuildResult:
-    matched_files_by_species = index_audio_files(sound_dirs, requested_entries, taxonomy)
-    missing_species = [
-        entry.common_name
-        for entry in requested_entries
-        if not matched_files_by_species.get(entry.common_name)
-    ]
-    if strict and missing_species:
-        raise BirdsongError(
-            "Missing audio for: " + ", ".join(missing_species)
+    result = prepare_playlist(
+        requested_entries=requested_entries,
+        sound_dirs=sound_dirs,
+        taxonomy=taxonomy,
+        strict=strict,
+    )
+    return write_playlist(result, output_path, absolute_paths=absolute_paths)
+
+
+def export_playlist_audio(
+    playlist_result: PlaylistBuildResult,
+    output_dir: Path,
+    *,
+    bitrate: str = DEFAULT_EXPORT_BITRATE,
+) -> AudioExportResult:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    ffmpeg_path = shutil.which("ffmpeg")
+    track_count = len(playlist_result.ordered_files)
+    if track_count == 0:
+        return AudioExportResult(output_dir=output_dir, exported_tracks=[])
+
+    prefix_width = max(3, len(str(track_count)))
+    exported_tracks: list[AudioExportTrack] = []
+    for track_number, source_path in enumerate(playlist_result.ordered_files, start=1):
+        destination = output_dir / build_export_filename(
+            source_path=source_path,
+            track_number=track_number,
+            prefix_width=prefix_width,
+        )
+        export_audio_file(
+            source_path=source_path,
+            destination=destination,
+            ffmpeg_path=ffmpeg_path,
+            bitrate=bitrate,
+            track_number=track_number,
+            total_tracks=track_count,
+        )
+        exported_tracks.append(
+            AudioExportTrack(
+                track_number=track_number,
+                source_path=source_path,
+                output_path=destination,
+            )
         )
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    lines = ["#EXTM3U"]
-    entry_count = 0
-    for entry in requested_entries:
-        for file_path in matched_files_by_species.get(entry.common_name, []):
-            if absolute_paths:
-                playlist_path = str(file_path.resolve())
-            else:
-                playlist_path = os.path.relpath(file_path, start=output_path.parent)
-            lines.append(playlist_path)
-            entry_count += 1
-    output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return PlaylistBuildResult(
-        output_path=output_path,
-        matched_files_by_species=matched_files_by_species,
-        missing_species=missing_species,
-        entry_count=entry_count,
+    return AudioExportResult(output_dir=output_dir, exported_tracks=exported_tracks)
+
+
+def build_export_filename(
+    *,
+    source_path: Path,
+    track_number: int,
+    prefix_width: int,
+) -> str:
+    stem = sanitize_filename_component(source_path.stem)
+    return f"{track_number:0{prefix_width}d} {stem}.mp3"
+
+
+def export_audio_file(
+    *,
+    source_path: Path,
+    destination: Path,
+    ffmpeg_path: str | None,
+    bitrate: str,
+    track_number: int,
+    total_tracks: int,
+) -> None:
+    temp_path = destination.with_name(f"{destination.stem}.part{destination.suffix}")
+    if temp_path.exists():
+        temp_path.unlink()
+    try:
+        if source_path.suffix.casefold() == ".mp3":
+            shutil.copy2(source_path, temp_path)
+        else:
+            if ffmpeg_path is None:
+                raise BirdsongError("ffmpeg is required to export non-MP3 audio but was not found on PATH.")
+            convert_audio_to_mp3(
+                source_path=source_path,
+                destination=temp_path,
+                ffmpeg_path=ffmpeg_path,
+                bitrate=bitrate,
+            )
+        write_track_tag(
+            temp_path,
+            track_number=track_number,
+            total_tracks=total_tracks,
+            title=destination.stem,
+        )
+        temp_path.replace(destination)
+    except BaseException:
+        if temp_path.exists():
+            temp_path.unlink()
+        raise
+
+
+def convert_audio_to_mp3(
+    *,
+    source_path: Path,
+    destination: Path,
+    ffmpeg_path: str,
+    bitrate: str,
+) -> None:
+    completed = subprocess.run(
+        [
+            ffmpeg_path,
+            "-y",
+            "-nostdin",
+            "-v",
+            "error",
+            "-i",
+            str(source_path),
+            "-codec:a",
+            "libmp3lame",
+            "-b:a",
+            bitrate,
+            str(destination),
+        ],
+        capture_output=True,
+        text=True,
     )
+    if completed.returncode != 0:
+        stderr = completed.stderr.strip() or "ffmpeg conversion failed"
+        raise BirdsongError(f"Unable to export {source_path.name} as mp3: {stderr}")
+
+
+def write_track_tag(
+    path: Path,
+    *,
+    track_number: int,
+    total_tracks: int,
+    title: str,
+) -> None:
+    try:
+        try:
+            tags = ID3(path)
+        except ID3NoHeaderError:
+            tags = ID3()
+        tags.delall("TRCK")
+        tags.delall("TIT2")
+        tags.add(TRCK(encoding=3, text=[f"{track_number}/{total_tracks}"]))
+        tags.add(TIT2(encoding=3, text=[title]))
+        tags.save(path)
+    except Exception as exc:
+        raise BirdsongError(f"Unable to write MP3 tags for {path.name}: {exc}") from exc
+
+
+def order_playlist_files(
+    requested_entries: list[TaxonomyEntry],
+    matched_files_by_species: dict[str, list[Path]],
+) -> list[Path]:
+    ordered_files: list[Path] = []
+    for entry in requested_entries:
+        ordered_files.extend(matched_files_by_species.get(entry.common_name, []))
+    return ordered_files
 
 
 def index_audio_files(
