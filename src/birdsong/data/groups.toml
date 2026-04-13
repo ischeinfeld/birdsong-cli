@@ -1,0 +1,96 @@
+version = 1
+
+[groups.warblers]
+description = "New World warblers."
+families = ["New World Warblers"]
+
+[groups.vireos]
+description = "Vireos and close allies."
+families = ["Vireos, Shrike-Babblers, and Erpornis"]
+
+[groups.wrens]
+description = "Wrens."
+families = ["Wrens"]
+
+[groups.nuthatches]
+description = "Nuthatches."
+families = ["Nuthatches"]
+
+[groups.kinglets]
+description = "Kinglets."
+families = ["Kinglets"]
+
+[groups.chickadees]
+description = "Tits, chickadees, and titmice."
+families = ["Tits, Chickadees, and Titmice"]
+
+[groups.gnatcatchers]
+description = "Gnatcatchers."
+families = ["Gnatcatchers"]
+
+[groups.thrushes]
+description = "Thrushes and allies."
+families = ["Thrushes and Allies"]
+
+[groups.mockingbirds]
+description = "Mockingbirds and thrashers."
+families = ["Mockingbirds and Thrashers"]
+
+[groups.waxwings]
+description = "Waxwings."
+families = ["Waxwings"]
+
+[groups.swallows]
+description = "Swallows."
+families = ["Swallows"]
+
+[groups.finches]
+description = "Finches and close allies."
+families = ["Finches, Euphonias, and Allies"]
+
+[groups.sparrows]
+description = "New World sparrows."
+families = ["New World Sparrows"]
+
+[groups.cardinals]
+description = "Cardinals, buntings, grosbeaks, and close allies."
+families = ["Cardinals and Allies"]
+
+[groups.tanagers]
+description = "Tanagers and close allies."
+families = ["Tanagers and Allies"]
+
+[groups.treecreepers]
+description = "Treecreepers."
+families = ["Treecreepers"]
+
+[groups.pipits]
+description = "Pipits and wagtails."
+families = ["Wagtails and Pipits"]
+
+[groups.larks]
+description = "Larks."
+families = ["Larks"]
+
+[groups.songbirds]
+description = "Curated small to medium singing passerines including warblers, vireos, wrens, thrushes, finches, sparrows, and similar families."
+groups = [
+  "warblers",
+  "vireos",
+  "wrens",
+  "nuthatches",
+  "kinglets",
+  "chickadees",
+  "gnatcatchers",
+  "thrushes",
+  "mockingbirds",
+  "waxwings",
+  "swallows",
+  "finches",
+  "sparrows",
+  "cardinals",
+  "tanagers",
+  "treecreepers",
+  "pipits",
+  "larks",
+]

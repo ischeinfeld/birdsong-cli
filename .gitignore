@@ -2,6 +2,7 @@
 __pycache__/
 *.py[codz]
 *$py.class
+.DS_Store
 
 # C extensions
 *.so
@@ -200,6 +201,11 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# Local bird-audio assets and generated outputs
+data/downloads/
+data/The Cornell Guide to Bird Sounds--United States and Canada (v2025)/
+playlists/
 
 # Marimo
 marimo/_static/

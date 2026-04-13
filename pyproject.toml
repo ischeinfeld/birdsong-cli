@@ -1,0 +1,24 @@
+[build-system]
+requires = ["poetry-core>=1.9.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "birdsong-cli"
+version = "0.1.0"
+description = "CLI tools for building bird sound playlists from eBird and xeno-canto data."
+authors = ["OpenAI Codex"]
+readme = "README.md"
+packages = [{ include = "birdsong", from = "src" }]
+include = [{ path = "src/birdsong/data/groups.toml", format = ["sdist", "wheel"] }]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0"
+
+[tool.poetry.scripts]
+birdsong = "birdsong.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
