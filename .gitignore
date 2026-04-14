@@ -206,6 +206,7 @@ cython_debug/
 data/downloads/
 data/The Cornell Guide to Bird Sounds--United States and Canada (v2025)/
 playlists/
+exports/
 
 # Marimo
 marimo/_static/
