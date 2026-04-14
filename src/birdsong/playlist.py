@@ -33,6 +33,7 @@ LEADING_NAME_RE = re.compile(r"^(?P<name>.+?)\s+\d{2}\b")
 @dataclass(frozen=True, slots=True)
 class PlaylistBuildResult:
     output_path: Path | None
+    requested_species: list[str]
     matched_files_by_species: dict[str, list[Path]]
     missing_species: list[str]
     ordered_files: list[Path]
@@ -42,6 +43,9 @@ class PlaylistBuildResult:
 @dataclass(frozen=True, slots=True)
 class AudioExportTrack:
     track_number: int
+    bird_number: int
+    bird_file_number: int
+    species_name: str
     source_path: Path
     output_path: Path
 
@@ -75,6 +79,7 @@ def prepare_playlist(
     ordered_files = order_playlist_files(requested_entries, matched_files_by_species)
     return PlaylistBuildResult(
         output_path=None,
+        requested_species=[entry.common_name for entry in requested_entries],
         matched_files_by_species=matched_files_by_species,
         missing_species=missing_species,
         ordered_files=ordered_files,
@@ -126,30 +131,36 @@ def export_playlist_audio(
 ) -> AudioExportResult:
     output_dir.mkdir(parents=True, exist_ok=True)
     ffmpeg_path = shutil.which("ffmpeg")
-    track_count = len(playlist_result.ordered_files)
+    export_jobs = build_export_jobs(playlist_result)
+    track_count = len(export_jobs)
     if track_count == 0:
         return AudioExportResult(output_dir=output_dir, exported_tracks=[])
 
-    prefix_width = max(3, len(str(track_count)))
     exported_tracks: list[AudioExportTrack] = []
-    for track_number, source_path in enumerate(playlist_result.ordered_files, start=1):
+    for job in export_jobs:
         destination = output_dir / build_export_filename(
-            source_path=source_path,
-            track_number=track_number,
-            prefix_width=prefix_width,
+            source_path=job.source_path,
+            species_name=job.species_name,
+            bird_number=job.bird_number,
+            bird_file_number=job.bird_file_number,
+            bird_prefix_width=job.bird_prefix_width,
+            file_prefix_width=job.file_prefix_width,
         )
         export_audio_file(
-            source_path=source_path,
+            source_path=job.source_path,
             destination=destination,
             ffmpeg_path=ffmpeg_path,
             bitrate=bitrate,
-            track_number=track_number,
+            track_number=job.track_number,
             total_tracks=track_count,
         )
         exported_tracks.append(
             AudioExportTrack(
-                track_number=track_number,
-                source_path=source_path,
+                track_number=job.track_number,
+                bird_number=job.bird_number,
+                bird_file_number=job.bird_file_number,
+                species_name=job.species_name,
+                source_path=job.source_path,
                 output_path=destination,
             )
         )
@@ -160,11 +171,21 @@ def export_playlist_audio(
 def build_export_filename(
     *,
     source_path: Path,
-    track_number: int,
-    prefix_width: int,
+    species_name: str,
+    bird_number: int,
+    bird_file_number: int,
+    bird_prefix_width: int,
+    file_prefix_width: int,
 ) -> str:
-    stem = sanitize_filename_component(source_path.stem)
-    return f"{track_number:0{prefix_width}d} {stem}.mp3"
+    species_part = sanitize_filename_component(species_name).replace(" ", "_")
+    detail_part = extract_export_detail(source_path.stem, species_name)
+    return (
+        f"{bird_number:0{bird_prefix_width}d}_"
+        f"{species_part}_"
+        f"{bird_file_number:0{file_prefix_width}d}"
+        + (f"_{detail_part}" if detail_part else "")
+        + ".mp3"
+    )
 
 
 def export_audio_file(
@@ -253,6 +274,67 @@ def write_track_tag(
         tags.save(path)
     except Exception as exc:
         raise BirdsongError(f"Unable to write MP3 tags for {path.name}: {exc}") from exc
+
+
+@dataclass(frozen=True, slots=True)
+class ExportJob:
+    track_number: int
+    bird_number: int
+    bird_file_number: int
+    bird_prefix_width: int
+    file_prefix_width: int
+    species_name: str
+    source_path: Path
+
+
+def build_export_jobs(playlist_result: PlaylistBuildResult) -> list[ExportJob]:
+    if not playlist_result.requested_species:
+        return []
+
+    bird_prefix_width = max(3, len(str(len(playlist_result.requested_species))))
+    max_files_for_any_bird = max(
+        (
+            len(playlist_result.matched_files_by_species.get(species_name, []))
+            for species_name in playlist_result.requested_species
+        ),
+        default=0,
+    )
+    file_prefix_width = max(2, len(str(max_files_for_any_bird)))
+
+    jobs: list[ExportJob] = []
+    track_number = 1
+    for bird_number, species_name in enumerate(playlist_result.requested_species, start=1):
+        for bird_file_number, source_path in enumerate(
+            playlist_result.matched_files_by_species.get(species_name, []),
+            start=1,
+        ):
+            jobs.append(
+                ExportJob(
+                    track_number=track_number,
+                    bird_number=bird_number,
+                    bird_file_number=bird_file_number,
+                    bird_prefix_width=bird_prefix_width,
+                    file_prefix_width=file_prefix_width,
+                    species_name=species_name,
+                    source_path=source_path,
+                )
+            )
+            track_number += 1
+    return jobs
+
+
+def extract_export_detail(source_stem: str, species_name: str) -> str:
+    stem = sanitize_filename_component(source_stem)
+    species_stem = sanitize_filename_component(species_name)
+    match = re.match(
+        rf"^{re.escape(species_stem)}(?:\s+\d{{1,3}})?(?:\s+|$)",
+        stem,
+        flags=re.IGNORECASE,
+    )
+    if match is not None:
+        stem = stem[match.end() :].strip()
+    detail = sanitize_filename_component(stem).replace(" ", "_")
+    return detail if detail else "recording"
 
 
 def order_playlist_files(

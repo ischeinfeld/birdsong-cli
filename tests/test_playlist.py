@@ -114,8 +114,10 @@ def test_export_playlist_audio_preserves_order_converts_to_mp3_and_tags_tracks(t
     sound_dir.mkdir()
     wav_source = sound_dir / "Redpoll-live-cut.wav"
     mp3_source = sound_dir / "American Barn Owl 01 Calls.mp3"
+    mp3_source_2 = sound_dir / "American Barn Owl 02 Song.mp3"
     write_silent_wav(wav_source)
     write_silent_mp3(mp3_source)
+    write_silent_mp3(mp3_source_2)
 
     requested = [
         taxonomy.resolve("Redpoll"),
@@ -128,16 +130,26 @@ def test_export_playlist_audio_preserves_order_converts_to_mp3_and_tags_tracks(t
 
     exported_names = [track.output_path.name for track in export_result.exported_tracks]
     assert exported_names == [
-        "001 Redpoll live cut.mp3",
-        "002 American Barn Owl 01 Calls.mp3",
+        "001_Redpoll_01_live_cut.mp3",
+        "002_American_Barn_Owl_01_Calls.mp3",
+        "002_American_Barn_Owl_02_Song.mp3",
     ]
 
     first_tags = ID3(export_result.exported_tracks[0].output_path)
     second_tags = ID3(export_result.exported_tracks[1].output_path)
-    assert first_tags.getall("TRCK")[0].text == ["1/2"]
-    assert second_tags.getall("TRCK")[0].text == ["2/2"]
+    third_tags = ID3(export_result.exported_tracks[2].output_path)
+    assert first_tags.getall("TRCK")[0].text == ["1/3"]
+    assert second_tags.getall("TRCK")[0].text == ["2/3"]
+    assert third_tags.getall("TRCK")[0].text == ["3/3"]
     assert export_result.exported_tracks[0].output_path.suffix == ".mp3"
     assert export_result.exported_tracks[1].output_path.suffix == ".mp3"
+    assert export_result.exported_tracks[2].output_path.suffix == ".mp3"
+    assert export_result.exported_tracks[0].bird_number == 1
+    assert export_result.exported_tracks[0].bird_file_number == 1
+    assert export_result.exported_tracks[1].bird_number == 2
+    assert export_result.exported_tracks[1].bird_file_number == 1
+    assert export_result.exported_tracks[2].bird_number == 2
+    assert export_result.exported_tracks[2].bird_file_number == 2
 
 
 @pytest.mark.skipif(not FFMPEG_AVAILABLE, reason="ffmpeg required for export tests")
@@ -169,5 +181,5 @@ def test_playlist_build_can_export_without_writing_playlist(
 
     assert exit_code == 0
     exported = sorted(export_dir.glob("*.mp3"))
-    assert [path.name for path in exported] == ["001 American Barn Owl 01 Calls.mp3"]
+    assert [path.name for path in exported] == ["001_American_Barn_Owl_01_Calls.mp3"]
     assert not (tmp_path / "playlist.m3u").exists()

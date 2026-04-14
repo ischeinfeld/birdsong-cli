@@ -230,7 +230,10 @@ def add_playlist_parsers(subparsers: argparse._SubParsersAction[argparse.Argumen
         "--export-dir",
         type=Path,
         metavar="DIR",
-        help="Export the ordered playlist files as MP3s into this directory with track-number prefixes and MP3 track tags.",
+        help=(
+            "Export the ordered playlist files as MP3s into this directory using "
+            "bird-order and per-bird file-number filename prefixes plus MP3 track tags."
+        ),
     )
     playlist_build_parser.add_argument(
         "--strict",
@@ -354,7 +357,10 @@ def add_workflow_parsers(subparsers: argparse._SubParsersAction[argparse.Argumen
         "--export-dir",
         type=Path,
         metavar="DIR",
-        help="Export the ordered workflow result as MP3s into this directory with track-number prefixes and MP3 track tags.",
+        help=(
+            "Export the ordered workflow result as MP3s into this directory using "
+            "bird-order and per-bird file-number filename prefixes plus MP3 track tags."
+        ),
     )
     histogram_workflow_parser.add_argument(
         "--min-frequency",

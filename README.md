@@ -172,7 +172,7 @@ Important options:
 - `--output PLAYLIST.m3u`
   Optional if `--export-dir` is used. Destination playlist file.
 - `--export-dir DIR`
-  Optional if `--output` is used. Export the ordered result as MP3 files with numeric filename prefixes and MP3 track-number tags.
+  Optional if `--output` is used. Export the ordered result as MP3 files with bird-order and per-bird file-number filename prefixes plus MP3 track-number tags.
 - `--strict`
   Fail instead of warning when species have no matching audio.
 - `--absolute-paths`
@@ -274,7 +274,7 @@ Important options:
 - `--output PLAYLIST.m3u`
   Optional if `--export-dir` is used. Playlist destination.
 - `--export-dir DIR`
-  Optional if `--output` is used. Export the final ordered result as MP3 files with numeric filename prefixes and MP3 track-number tags.
+  Optional if `--output` is used. Export the final ordered result as MP3 files with bird-order and per-bird file-number filename prefixes plus MP3 track-number tags.
 - `--min-frequency FLOAT`
   Minimum histogram frequency.
 - `--limit N`
@@ -482,7 +482,8 @@ Behavior:
 
 - you may use `--export-dir` by itself, `--output` by itself, or both together
 - export order is exactly the same as the final playlist order
-- exported filenames get a numeric prefix such as `001`, `002`, `003`
+- exported filenames are prefixed by bird position in the requested list, then file position within that bird
+- the filename format is `<bird-number>_<Bird_Name>_<file-number>_<detail>.mp3`
 - every exported file is written as `.mp3`
 - source MP3 files are copied, then tagged
 - non-MP3 sources are transcoded to MP3 through `ffmpeg`
@@ -491,9 +492,9 @@ Behavior:
 Example exported filenames:
 
 ```text
-001 Black-throated Blue Warbler 03 Song US-NY.mp3
-002 Black-throated Blue Warbler 07 Calls US-NY.mp3
-003 American Redstart 01 Song US-NY.mp3
+001_Black_throated_Blue_Warbler_01_Song_US_NY.mp3
+001_Black_throated_Blue_Warbler_02_Calls_US_NY.mp3
+002_American_Redstart_01_Song_US_NY.mp3
 ```
 
 The export directory should generally be treated as a dedicated output directory for one export set.

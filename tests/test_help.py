@@ -36,7 +36,7 @@ def test_playlist_help_explains_repeatable_inputs(capsys: pytest.CaptureFixture[
     assert "Repeatable. A current eBird species common name." in help_text
     assert "Repeatable. File containing one bird name per line" in help_text
     assert "Repeatable. Recursively scan this directory for audio" in help_text
-    assert "track-number prefixes" in help_text
+    assert "bird-order and per-bird file-number" in help_text
     assert "MP3 track" in help_text
 
 
