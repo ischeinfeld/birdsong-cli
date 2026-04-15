@@ -12,8 +12,6 @@ It validates bird names against the latest live eBird taxonomy, supports taxonom
 
 This project uses Poetry for packaging and environment management.
 
-The repository lives under an iCloud path with spaces, so Poetry's default cache-managed virtualenv is more reliable than an in-project `.venv`.
-
 ```bash
 poetry install
 poetry run birdsong --help
